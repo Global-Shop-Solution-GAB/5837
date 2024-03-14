@@ -1,0 +1,197 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..create
+Gui.Form..caption("Positive Pay")
+Gui.Form..size(12330,2565)
+Gui.Form..position(0,0)
+Gui.Form..event(UnLoad,Form_UnLoad)
+Gui.Form..forecolor(0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..mousepointer(0)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form.dpStart.create(datepicker)
+Gui.Form.dpStart.size(1935,285)
+Gui.Form.dpStart.position(165,1020)
+Gui.Form.dpStart.defaultvalue("")
+Gui.Form.lbl1.Create(Label,"Start Date",True,1035,255,0,165,810,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtExportFolder.Create(TextBox,"",True,11115,300,0,135,330,True,0,"Arial",8,-2147483643,1)
+Gui.Form.lbl2.Create(Label,"Export Folder",True,1215,255,0,135,105,True,0,"Arial",8,-2147483633,0)
+Gui.Form.cmdBrowseExportFolder.Create(Button)
+Gui.Form.cmdBrowseExportFolder.Size(570,375)
+Gui.Form.cmdBrowseExportFolder.Position(11340,300)
+Gui.Form.cmdBrowseExportFolder.Caption("^")
+Gui.Form.cmdBrowseExportFolder.Event(Click,cmdBrowseExportFolder_Click)
+Gui.Form.cmdOK.Create(Button)
+Gui.Form.cmdOK.Size(855,375)
+Gui.Form.cmdOK.Position(195,1500)
+Gui.Form.cmdOK.Caption("OK")
+Gui.Form.cmdOK.Event(Click,cmdOK_Click)
+Gui.Form.dpEnd.Create(DatePicker)
+Gui.Form.dpEnd.Size(1935,285)
+Gui.Form.dpEnd.Position(2310,1020)
+Gui.Form.dpEnd.DefaultValue("")
+Gui.Form.lbl3.Create(Label,"End Date",True,1035,255,0,2310,810,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtAcct.Create(TextBox,"8972512",True,1710,300,0,4425,1035,True,0,"Arial",8,-2147483643,1)
+Gui.Form.lbl4.Create(Label,"Account",True,1035,255,0,4410,810,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Jan 18, 2020
+'Customer: Fortville Feeders, Inc
+'This project will generate a positive pay file with layout: Account#,check#,amount,Issue date, Payee
+
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sDefaultfolder.Declare
+	v.Local.bExist.Declare
+	v.Local.bInGroup.Declare
+	
+	'Check Security Group
+	f.Global.Security.IsInGroup(v.Caller.User,"POSPAY",V.Caller.CompanyCode,V.Local.bInGroup)
+	F.Intrinsic.Control.If(V.Local.bInGroup.Not)
+		F.Intrinsic.UI.Msgbox("You are not in Security Group to use this program.","Attention")
+		f.Intrinsic.Control.CallSub("Unload")
+	F.Intrinsic.Control.EndIf	
+		
+	'Check Custom folder
+	f.Intrinsic.String.Build("{0}\Custom",v.Caller.GlobalDir,v.Local.sDefaultfolder)
+	f.Intrinsic.File.DirExists(v.Local.sDefaultfolder,v.Local.bExist)
+	f.Intrinsic.Control.If(v.Local.bExist.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDefaultfolder)
+	f.Intrinsic.Control.EndIf
+	
+	'Check default folder
+	f.Intrinsic.String.Build("{0}\Custom\5837",v.Caller.GlobalDir,v.Local.sDefaultfolder)
+	f.Intrinsic.File.DirExists(v.Local.sDefaultfolder,v.Local.bExist)
+	f.Intrinsic.Control.If(v.Local.bExist.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDefaultfolder)
+	f.Intrinsic.Control.EndIf	
+	
+	'Default Positive Pay folder that store the output file.
+	f.Intrinsic.String.Build("{0}\Custom\5837\{1}",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Local.sDefaultfolder)
+	f.Intrinsic.File.DirExists(v.Local.sDefaultfolder,v.Local.bExist)
+	f.Intrinsic.Control.If(v.Local.bExist.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDefaultfolder)
+	f.Intrinsic.Control.EndIf
+	'Set Default folder
+	gui.Form.txtExportFolder.Text(v.Local.sDefaultfolder)	
+
+	gui.Form..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.cmdOK_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.dStart.Declare
+	v.Local.dEnd.Declare
+	v.Local.sSQL.Declare
+	v.Local.iCnt.Declare
+	v.Local.sPayee.Declare
+	v.Local.sLines.Declare
+	v.Local.sCk_date.Declare
+	v.Local.sFile.Declare
+	v.Local.bEx.Declare
+	
+	f.Intrinsic.File.DirExists(v.Screen.Form!txtExportFolder.text.Trim,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.UI.Msgbox("Folder does not exist.","Attention")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIF
+	
+	v.Local.dStart.Set(v.Screen.Form!dpStart.Value)
+	v.Local.dEnd.Set(v.Screen.Form!dpEnd.Value)
+	f.Intrinsic.Control.If(v.Local.dStart,>,v.Local.dEnd)
+		f.Intrinsic.UI.Msgbox("Invalid date range.","Attention")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIF	
+	
+	f.Intrinsic.String.Build("select ck_no,ck_date,amount,Case When ltrim(rtrim(Name_Vendor_Pay)) <> '' then  Replace(ltrim(rtrim(Name_Vendor_Pay)),',',' ')  else  Replace(ltrim(rtrim(Payee)),',',' ')  End as Name_Vendor_Pay from v_CHECKS_LOG c left join v_vendor_pay_to v on c.vend_no = v.vendor where (ck_date between '{0}' and '{1}') and ck_or_void = 'C' order by ck_date,ck_no",v.Local.dStart.PervasiveDate,v.Local.dEnd.PervasiveDate,v.Local.sSQL)
+	
+	f.Intrinsic.Control.If(v.DataTable.Checks.Exists)
+		f.Data.DataTable.Close("Checks")
+	f.Intrinsic.Control.EndIf
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	f.Data.DataTable.CreateFromSQL("Checks","conx",v.Local.sSQL,True)	
+	f.ODBC.Connection!conx.Close
+	
+	f.Intrinsic.Control.If(v.DataTable.Checks.RowCount,=,0)
+		f.Intrinsic.UI.Msgbox("No checks found for the date.","Attention")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	v.Local.sAcct.Declare
+	v.Local.sAcct.Set(v.Screen.Form!txtAcct.Text.Trim)
+	gui.Form..Visible(False)
+	'Account#,check#,amount,Issue date, Payee	
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Checks.RowCount--,1)
+	
+		f.Intrinsic.String.Build("{0}{1}{0}",v.Ambient.DblQuote,v.DataTable.Checks(v.Local.iCnt).Name_Vendor_Pay!FieldValTrim,v.Local.sPayee)
+		f.Intrinsic.String.Format(v.DataTable.Checks(v.Local.iCnt).Ck_Date!FieldValString,"MMDDYY",v.Local.sCk_date)
+		f.Intrinsic.Control.If(v.Local.iCnt,=,0)	
+			f.Intrinsic.String.Build("{0},{1},{2},{3},{4}",v.Local.sAcct,v.DataTable.Checks(v.Local.iCnt).CK_No!FieldValTrim,v.DataTable.Checks(v.Local.iCnt).Amount!FieldValString,v.Local.sCk_date,v.Local.sPayee,V.Local.sLines)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("{0}{1}{2},{3},{4},{5},{6}",v.Local.sLines,v.Ambient.NewLine,v.Local.sAcct,v.DataTable.Checks(v.Local.iCnt).CK_No!FieldValTrim,v.DataTable.Checks(v.Local.iCnt).Amount!FieldValString,v.Local.sCk_date,v.Local.sPayee,V.Local.sLines)
+		f.Intrinsic.Control.EndIf		
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+	
+	f.Intrinsic.String.Build("{0}\{1}_{2}_{3}.csv",v.Screen.Form!txtExportFolder.Text.Trim,v.Local.dStart.FormatYYYYMMDD,v.Local.dEnd.FormatYYYYMMDD,v.Ambient.Now.FormatHHNNSS,v.Local.sFile)
+	f.Intrinsic.File.String2File(v.Local.sFile,v.Local.sLines)
+	f.Intrinsic.UI.Msgbox("Done")
+		
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdOK_Click.End
+
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	f.Intrinsic.String.Build("Subroutine Error {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.cmdBrowseExportFolder_Click.Start
+'Browse Export Folder
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sPath.Declare
+	
+	F.Intrinsic.UI.FolderBrowser("Select Folder for Path",V.Local.sPath)
+	f.Intrinsic.Control.If(v.Local.sPath.IsCancel,=,False)
+		gui.Form.txtExportFolder.Text(v.Local.sPath)
+	f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	f.Intrinsic.String.Build("Subroutine Error {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrowseExportFolder_Click.End
+
+Program.Sub.Comments.Start
+Program.Sub.Comments.End
